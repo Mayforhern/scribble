@@ -2,49 +2,303 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Scribble</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scribble - Multiplayer Drawing Game</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            touch-action: none;
-            overflow: hidden;
-            background-color: var(--tg-theme-bg-color, #f5f5f5);
-            color: var(--tg-theme-text-color, #000000);
+        :root {
+            --primary-color: var(--tg-theme-button-color, #0088cc);
+            --primary-text-color: var(--tg-theme-button-text-color, #ffffff);
+            --bg-color: var(--tg-theme-bg-color, #f5f5f5);
+            --secondary-bg: var(--tg-theme-secondary-bg-color, #e6e6e6);
+            --text-color: var(--tg-theme-text-color, #222222);
+            --hint-color: var(--tg-theme-hint-color, #999999);
+            --border-radius: 12px;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
         
-        .container {
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            touch-action: manipulation;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        .app {
             display: flex;
             flex-direction: column;
             height: 100vh;
-            max-height: 100vh;
+            width: 100%;
+            max-width: 100%;
         }
         
-        .header {
-            background-color: var(--tg-theme-secondary-bg-color, #e6e6e6);
-            padding: 10px;
+        /* SCREENS */
+        .screen {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            padding: 16px;
+        }
+        
+        .screen.active {
+            display: flex;
+        }
+        
+        /* JOIN SCREEN */
+        .join-screen {
+            justify-content: center;
+            align-items: center;
             text-align: center;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
-        h1 {
-            margin: 0;
-            color: var(--tg-theme-text-color, #000000);
-            font-size: 1.5rem;
+        .join-screen h1 {
+            font-size: 2rem;
+            margin-bottom: 24px;
+            color: var(--primary-color);
         }
         
-        .drawing-area {
-            flex: 1;
-            position: relative;
-            overflow: hidden;
-            touch-action: none;
+        .join-options {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+            max-width: 320px;
+        }
+        
+        .option-card {
             background-color: white;
-            margin: 10px;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+            padding: 24px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .option-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .option-card h3 {
+            margin-bottom: 8px;
+        }
+        
+        .option-card p {
+            color: var(--hint-color);
+            font-size: 0.9rem;
+        }
+        
+        .join-form {
+            margin-top: 24px;
+            width: 100%;
+            max-width: 320px;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--secondary-bg);
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            font-family: inherit;
+        }
+        
+        .btn {
+            background-color: var(--primary-color);
+            color: var(--primary-text-color);
+            border: none;
+            border-radius: var(--border-radius);
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            font-family: inherit;
+            width: 100%;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background-color: var(--secondary-bg);
+            color: var(--text-color);
+        }
+        
+        .back-button {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--primary-color);
+        }
+        
+        /* LOBBY SCREEN */
+        .lobby-screen {
+            justify-content: space-between;
+        }
+        
+        .lobby-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .room-code {
+            background-color: white;
+            padding: 8px 16px;
+            border-radius: var(--border-radius);
+            font-size: 1.2rem;
+            font-weight: 700;
+            display: inline-block;
+            margin-top: 8px;
+            box-shadow: var(--shadow);
+        }
+        
+        .copy-icon {
+            margin-left: 8px;
+            cursor: pointer;
+        }
+        
+        .players-list {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            flex-grow: 1;
+            margin-bottom: 24px;
+            max-height: 50vh;
+            overflow-y: auto;
+        }
+        
+        .player-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--secondary-bg);
+        }
+        
+        .player-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .player-info {
+            flex-grow: 1;
+        }
+        
+        .player-name {
+            font-weight: 600;
+        }
+        
+        .player-status {
+            font-size: 0.8rem;
+            color: var(--hint-color);
+        }
+        
+        .player-host-badge {
+            background-color: gold;
+            color: black;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            margin-left: 8px;
+        }
+        
+        /* GAME SCREEN */
+        .game-screen {
+            justify-content: space-between;
+        }
+        
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .game-info {
+            font-size: 0.9rem;
+        }
+        
+        .word-display {
+            background-color: white;
+            border-radius: var(--border-radius);
+            padding: 8px 16px;
+            box-shadow: var(--shadow);
+            font-weight: 700;
+            text-align: center;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+        
+        .timer {
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: var(--border-radius);
+            padding: 4px 12px;
+            font-weight: 700;
+        }
+        
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            max-height: calc(100% - 100px);
+        }
+        
+        .drawing-container {
+            position: relative;
+            flex-grow: 1;
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 8px;
+            overflow: hidden;
         }
         
         canvas {
@@ -56,98 +310,480 @@
             touch-action: none;
         }
         
-        .controls {
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            padding: 10px;
-            background-color: var(--tg-theme-secondary-bg-color, #e6e6e6);
-            border-radius: 8px;
-            margin: 0 10px 10px;
-        }
-        
-        .color-picker {
+        .game-controls {
             display: flex;
             gap: 8px;
+            margin-bottom: 8px;
         }
         
-        .color {
-            width: 24px;
-            height: 24px;
+        .color-palette {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            flex-grow: 1;
+        }
+        
+        .color-option {
+            width: 30px;
+            height: 30px;
             border-radius: 50%;
-            border: 2px solid transparent;
             cursor: pointer;
+            border: 2px solid transparent;
         }
         
-        .color.selected {
-            border-color: var(--tg-theme-button-color, #007AFF);
+        .color-option.selected {
+            border-color: var(--primary-color);
             transform: scale(1.1);
         }
         
-        .black { background-color: #000000; }
-        .red { background-color: #FF3B30; }
-        .green { background-color: #34C759; }
-        .blue { background-color: #007AFF; }
-        .yellow { background-color: #FFCC00; }
-        
-        .thickness-slider {
+        .thickness-control {
+            background-color: white;
+            border-radius: var(--border-radius);
+            padding: 4px 8px;
             display: flex;
             align-items: center;
-            gap: 5px;
+            box-shadow: var(--shadow);
         }
         
-        .footer {
+        .thickness-label {
+            margin-right: 8px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+        
+        .action-buttons {
             display: flex;
-            justify-content: space-around;
-            padding: 10px;
-            background-color: var(--tg-theme-secondary-bg-color, #e6e6e6);
-            box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 8px;
         }
         
-        button {
-            background-color: var(--tg-theme-button-color, #007AFF);
-            color: var(--tg-theme-button-text-color, #FFFFFF);
+        .action-btn {
+            background-color: white;
             border: none;
+            border-radius: var(--border-radius);
             padding: 8px 16px;
-            border-radius: 8px;
-            font-weight: bold;
+            box-shadow: var(--shadow);
+            font-family: inherit;
+            font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.2s;
         }
         
-        button:active {
-            background-color: rgba(var(--tg-theme-button-color-rgb, 0, 122, 255), 0.8);
+        .clear-btn {
+            color: #e74c3c;
+        }
+        
+        .chat-area {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            height: 200px;
+            max-height: 30%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+        
+        .message {
+            margin-bottom: 8px;
+        }
+        
+        .message-sender {
+            font-weight: 700;
+            margin-right: 8px;
+        }
+        
+        .message-text {
+            word-break: break-word;
+        }
+        
+        .system-message {
+            color: var(--primary-color);
+            font-style: italic;
+            text-align: center;
+        }
+        
+        .chat-input-container {
+            display: flex;
+            border-top: 1px solid var(--secondary-bg);
+            padding: 8px;
+        }
+        
+        .chat-input {
+            flex-grow: 1;
+            border: none;
+            padding: 8px;
+            border-radius: var(--border-radius);
+            background-color: var(--secondary-bg);
+            font-family: inherit;
+        }
+        
+        .send-btn {
+            border: none;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: var(--border-radius);
+            padding: 0 16px;
+            margin-left: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        /* RESPONSIVE */
+        @media (min-width: 768px) {
+            .game-container {
+                flex-direction: row;
+                gap: 16px;
+            }
+            
+            .drawing-container {
+                flex-grow: 3;
+                margin-bottom: 0;
+            }
+            
+            .game-sidebar {
+                flex-grow: 1;
+                max-width: 300px;
+                display: flex;
+                flex-direction: column;
+            }
+            
+            .chat-area {
+                height: 100%;
+                max-height: 100%;
+            }
+            
+            .color-palette {
+                justify-content: flex-start;
+            }
+        }
+        
+        /* UTILITY */
+        .hidden {
+            display: none;
+        }
+        
+        .mt-16 {
+            margin-top: 16px;
+        }
+        
+        /* COLORS */
+        .black { background-color: #000000; }
+        .gray { background-color: #808080; }
+        .white { background-color: #ffffff; border: 1px solid #ccc; }
+        .red { background-color: #ff0000; }
+        .orange { background-color: #ffa500; }
+        .yellow { background-color: #ffff00; }
+        .green { background-color: #008000; }
+        .blue { background-color: #0000ff; }
+        .purple { background-color: #800080; }
+        .pink { background-color: #ffc0cb; }
+        .brown { background-color: #a52a2a; }
+        
+        /* ANIMATIONS */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        /* MODALS */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: var(--border-radius);
+            padding: 24px;
+            max-width: 90%;
+            width: 400px;
+            box-shadow: var(--shadow);
+        }
+        
+        .modal-header {
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .modal-body {
+            margin-bottom: 24px;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        
+        /* ROUND END SCREEN */
+        .round-end-container {
+            text-align: center;
+            padding: 24px;
+        }
+        
+        .round-word {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 24px;
+        }
+        
+        .scores-list {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        .score-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--secondary-bg);
+        }
+        
+        .score-name {
+            display: flex;
+            align-items: center;
+        }
+        
+        .score-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            margin-right: 12px;
+        }
+        
+        .score-value {
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+        
+        /* LOADER */
+        .loader {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .drawer-indicator {
+            background-color: #4caf50;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            margin-left: 8px;
+        }
+        
+        .hint-container {
+            display: flex;
+            margin-top: 8px;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .letter-box {
+            width: 24px;
+            height: 24px;
+            background-color: var(--secondary-bg);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+        
+        .letter-box.revealed {
+            background-color: var(--primary-color);
+            color: white;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
+    <div class="app">
+        <!-- JOIN SCREEN -->
+        <div id="joinScreen" class="screen active">
             <h1>Scribble</h1>
-        </div>
-        
-        <div class="drawing-area">
-            <canvas id="canvas"></canvas>
-        </div>
-        
-        <div class="controls">
-            <div class="color-picker">
-                <div class="color black selected" data-color="#000000"></div>
-                <div class="color red" data-color="#FF3B30"></div>
-                <div class="color green" data-color="#34C759"></div>
-                <div class="color blue" data-color="#007AFF"></div>
-                <div class="color yellow" data-color="#FFCC00"></div>
+            <div class="join-options">
+                <div class="option-card" id="createGameBtn">
+                    <h3>Create New Game</h3>
+                    <p>Start a new game and invite friends</p>
+                </div>
+                <div class="option-card" id="joinGameBtn">
+                    <h3>Join Game</h3>
+                    <p>Join an existing game with a room code</p>
+                </div>
             </div>
-            <div class="thickness-slider">
-                <span>Thickness:</span>
-                <input type="range" id="thickness" min="1" max="20" value="5">
+            
+            <div id="nameForm" class="join-form hidden">
+                <button class="back-button" id="backToOptions">←</button>
+                <div class="form-group">
+                    <label for="playerName">Your Name</label>
+                    <input type="text" id="playerName" placeholder="Enter your name" maxlength="15">
+                </div>
+                <button class="btn" id="createRoom">Create Room</button>
+            </div>
+            
+            <div id="joinForm" class="join-form hidden">
+                <button class="back-button" id="backToOptionsJoin">←</button>
+                <div class="form-group">
+                    <label for="playerNameJoin">Your Name</label>
+                    <input type="text" id="playerNameJoin" placeholder="Enter your name" maxlength="15">
+                </div>
+                <div class="form-group">
+                    <label for="roomCode">Room Code</label>
+                    <input type="text" id="roomCode" placeholder="Enter 6-digit room code" maxlength="6">
+                </div>
+                <button class="btn" id="joinRoom">Join Room</button>
             </div>
         </div>
         
-        <div class="footer">
-            <button id="clearBtn">Clear</button>
-            <button id="saveBtn">Save</button>
-            <button id="doneBtn">Done</button>
+        <!-- LOBBY SCREEN -->
+        <div id="lobbyScreen" class="screen">
+            <div class="lobby-header">
+                <h2>Waiting for players</h2>
+                <div>
+                    <span>Room Code:</span>
+                    <span class="room-code" id="roomCodeDisplay">ABCDEF</span>
+                    <span class="copy-icon" id="copyRoomCode">📋</span>
+                </div>
+            </div>
+            
+            <div class="players-list" id="playersList">
+                <!-- Players will be added dynamically -->
+            </div>
+            
+            <div>
+                <button class="btn" id="startGameBtn">Start Game</button>
+            </div>
+        </div>
+        
+        <!-- GAME SCREEN -->
+        <div id="gameScreen" class="screen">
+            <div class="game-header">
+                <div class="game-info">
+                    Round <span id="roundNumber">1</span>
+                </div>
+                <div class="word-display" id="wordDisplay">
+                    Waiting for word...
+                </div>
+                <div class="timer" id="timer">60s</div>
+            </div>
+            
+            <div class="game-container">
+                <div class="drawing-container">
+                    <canvas id="drawingCanvas"></canvas>
+                </div>
+                
+                <div class="game-sidebar">
+                    <div class="game-controls" id="drawingControls">
+                        <div class="color-palette">
+                            <div class="color-option black selected" data-color="#000000"></div>
+                            <div class="color-option gray" data-color="#808080"></div>
+                            <div class="color-option white" data-color="#FFFFFF"></div>
+                            <div class="color-option red" data-color="#FF0000"></div>
+                            <div class="color-option orange" data-color="#FFA500"></div>
+                            <div class="color-option yellow" data-color="#FFFF00"></div>
+                            <div class="color-option green" data-color="#008000"></div>
+                            <div class="color-option blue" data-color="#0000FF"></div>
+                            <div class="color-option purple" data-color="#800080"></div>
+                            <div class="color-option pink" data-color="#FFC0CB"></div>
+                            <div class="color-option brown" data-color="#A52A2A"></div>
+                        </div>
+                        
+                        <div class="thickness-control">
+                            <span class="thickness-label">Size</span>
+                            <input type="range" id="thicknessSlider" min="1" max="20" value="5">
+                        </div>
+                    </div>
+                    
+                    <div class="action-buttons" id="actionButtons">
+                        <button class="action-btn clear-btn" id="clearBtn">Clear</button>
+                    </div>
+                    
+                    <div class="hint-container" id="hintContainer">
+                        <!-- Letter hints will be added dynamically -->
+                    </div>
+                    
+                    <div class="chat-area">
+                        <div class="messages" id="messages">
+                            <!-- Messages will be added dynamically -->
+                            <div class="message system-message">
+                                <span class="message-text">Game started! Have fun!</span>
+                            </div>
+                        </div>
+                        <div class="chat-input-container">
+                            <input type="text" class="chat-input" id="chatInput" placeholder="Type your guess here...">
+                            <button class="send-btn" id="sendBtn">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- MODALS -->
+    <div id="roundEndModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="round-end-container">
+                <h2>Round Over!</h2>
+                <div class="round-word" id="revealedWord">APPLE</div>
+                <h3>Scores</h3>
+                <div class="scores-list" id="scoresList">
+                    <!-- Scores will be added dynamically -->
+                </div>
+                <p class="mt-16">Next round starting soon...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ERROR MODAL -->
+    <div id="errorModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="errorTitle">Error</h3>
+            </div>
+            <div class="modal-body">
+                <p id="errorMessage">An error occurred.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" id="errorOkBtn">OK</button>
+            </div>
         </div>
     </div>
     
